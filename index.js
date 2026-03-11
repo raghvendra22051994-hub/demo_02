@@ -1,72 +1,37 @@
-const express = require("express");
-const axios = require("axios");
 const cheerio = require("cheerio");
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+async function fetchData() {
+    const response = await fetch(
+        "https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=3519974"
+    );
 
-async function fetchCarrier(dot) {
+    const html = await response.text();
 
-    const url = "https://safer.fmcsa.dot.gov/query.asp";
+    const $ = cheerio.load(html);
 
-    const response = await axios.get(url, {
-        params: {
-            searchtype: "ANY",
-            query_type: "queryCarrierSnapshot",
-            query_param: "USDOT",
-            query_string: dot
-        },
-        headers: {
-            "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-            "Accept":
-                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        },
-        timeout: 15000
+    let data = {
+        dot: "3519974",
+        legal_name: "",
+        dba_name: "",
+        status: "",
+        entity_type: "",
+        address: "",
+        phone: ""
+    };
+
+    $("table tr").each((i, el) => {
+        const label = $(el).find("td").first().text().trim();
+        const value = $(el).find("td").eq(1).text().trim();
+
+        if (label.includes("Legal Name")) data.legal_name = value;
+        if (label.includes("DBA Name")) data.dba_name = value;
+        if (label.includes("Carrier Operation")) data.entity_type = value;
+        if (label.includes("Phone")) data.phone = value;
+        if (label.includes("Physical Address")) data.address = value;
+        if (label.includes("Operating Status")) data.status = value;
     });
 
-    const $ = cheerio.load(response.data);
-
-    function getValue(label) {
-        const el = $(`td:contains("${label}")`).next();
-        return el.text().trim();
-    }
-
-    return {
-        dot,
-        legal_name: getValue("Legal Name"),
-        dba_name: getValue("DBA Name"),
-        status: getValue("USDOT Status"),
-        entity_type: getValue("Entity Type"),
-        address: getValue("Physical Address"),
-        phone: getValue("Phone")
-    };
+    console.log(data);
 }
 
-app.get("/", (req, res) => {
-    res.send("Carrier API running");
-});
-
-app.get("/carrier/:dot", async (req, res) => {
-    try {
-
-        const data = await fetchCarrier(req.params.dot);
-
-        res.json({
-            success: true,
-            data
-        });
-
-    } catch (error) {
-
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-
-    }
-});
-
-app.listen(PORT, () => {
-    console.log("Server running on port " + PORT);
-});
+fetchData();
